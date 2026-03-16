@@ -1,8 +1,8 @@
 import imaplib
 import email
 
-from database import get_connection
-from filters import is_internal_email
+from connectra_core.database import get_connection
+from connectra_core.filters import is_internal_email
 
 
 def scan_mailbox(email_user, password, internal_domain, days, progress_callback=None):
@@ -10,7 +10,7 @@ def scan_mailbox(email_user, password, internal_domain, days, progress_callback=
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(email_user, password)
 
-    mail.select("inbox")
+    mail.select("inbox", readonly=True)
 
     if days:
      import datetime
@@ -25,6 +25,10 @@ def scan_mailbox(email_user, password, internal_domain, days, progress_callback=
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    # reset current discovery so filters apply fresh on each scan
+    cursor.execute("DELETE FROM contacts")
+    cursor.execute("DELETE FROM clients")
 
     for index, num in enumerate(mail_ids):
 

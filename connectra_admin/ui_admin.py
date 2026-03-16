@@ -14,7 +14,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QMessageBox,
     QLineEdit,
+    QFormLayout,
 )
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt
 
 from template_manager import (
     list_templates,
@@ -25,7 +28,7 @@ from template_manager import (
 )
 
 from holiday_importer import import_holiday_excel
-from database_admin import get_holidays, get_users, add_user
+from database_admin import get_holidays, get_users, add_user, get_setting, set_setting
 from activity_viewer import get_logs
 
 
@@ -35,35 +38,71 @@ class TemplateEditor(QDialog):
         super().__init__()
 
         self.setWindowTitle("Template Editor")
+        self.resize(900, 520)
 
-        layout = QVBoxLayout()
+        root = QVBoxLayout()
 
-        layout.addWidget(QLabel("Template Name"))
-        self.name_input = QTextEdit()
+        header = QLabel("Edit Email Template")
+        header.setObjectName("sectionTitle")
+        root.addWidget(header)
+
+        main = QHBoxLayout()
+
+        # left: form fields
+        form_col = QVBoxLayout()
+
+        form_col.addWidget(QLabel("Template Name"))
+        self.name_input = QLineEdit()
         self.name_input.setText(name)
-        layout.addWidget(self.name_input)
+        form_col.addWidget(self.name_input)
 
-        layout.addWidget(QLabel("Subject"))
-        self.subject_input = QTextEdit()
+        form_col.addWidget(QLabel("Subject"))
+        self.subject_input = QLineEdit()
         self.subject_input.setText(subject)
-        layout.addWidget(self.subject_input)
+        form_col.addWidget(self.subject_input)
 
-        layout.addWidget(QLabel("Body"))
+        form_col.addWidget(QLabel("Body (HTML)"))
         self.body_input = QTextEdit()
         self.body_input.setText(body)
-        layout.addWidget(self.body_input)
+        form_col.addWidget(self.body_input)
 
+        main.addLayout(form_col, stretch=2)
+
+        # right: live preview
+        preview_col = QVBoxLayout()
+        preview_label = QLabel("Preview")
+        preview_col.addWidget(preview_label)
+
+        self.preview = QTextEdit()
+        self.preview.setReadOnly(True)
+        preview_col.addWidget(self.preview)
+
+        main.addLayout(preview_col, stretch=2)
+
+        root.addLayout(main)
+
+        # footer buttons
+        footer = QHBoxLayout()
+        footer.addStretch()
         self.save_btn = QPushButton("Save")
-        layout.addWidget(self.save_btn)
+        footer.addWidget(self.save_btn)
+        root.addLayout(footer)
 
-        self.setLayout(layout)
+        self.setLayout(root)
 
         self.save_btn.clicked.connect(self.save)
 
+        # wiring for live preview
+        self.name_input.textChanged.connect(self.update_preview)
+        self.subject_input.textChanged.connect(self.update_preview)
+        self.body_input.textChanged.connect(self.update_preview)
+
+        self.update_preview()
+
     def save(self):
 
-        name = self.name_input.toPlainText().strip()
-        subject = self.subject_input.toPlainText().strip()
+        name = self.name_input.text().strip()
+        subject = self.subject_input.text().strip()
         body = self.body_input.toPlainText().strip()
 
         if not name:
@@ -72,6 +111,23 @@ class TemplateEditor(QDialog):
         save_template(name, subject, body)
 
         self.accept()
+
+    def update_preview(self):
+
+        name = self.name_input.text().strip()
+        subject = self.subject_input.text().strip()
+        body = self.body_input.toPlainText().strip()
+
+        header_html = (
+            f"<h3>{name or '(untitled)'}</h3>"
+            f"<p><b>Subject:</b> {subject}</p>"
+            "<hr/>"
+        )
+
+        # render body as HTML so tags are applied
+        full_html = header_html + body
+
+        self.preview.setHtml(full_html)
 
 
 class UserEditor(QDialog):
@@ -113,6 +169,83 @@ class UserEditor(QDialog):
         self.accept()
 
 
+class AdminAuthDialog(QDialog):
+
+    def __init__(self, has_existing_admin: bool):
+        super().__init__()
+
+        self.has_existing_admin = has_existing_admin
+
+        self.setWindowTitle("Connectra Admin")
+        self.resize(420, 220)
+
+        layout = QVBoxLayout()
+
+        header = QVBoxLayout()
+        title = QLabel("Connectra Admin")
+        subtitle = QLabel(
+            "Enter admin email and app password to manage templates and settings."
+        )
+        title.setObjectName("sectionTitle")
+        header.addWidget(title)
+        header.addWidget(subtitle)
+
+        layout.addLayout(header)
+
+        form = QFormLayout()
+
+        self.email_input = QLineEdit()
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+
+        form.addRow("Email", self.email_input)
+        form.addRow("Password", self.password_input)
+
+        layout.addLayout(form)
+
+        self.primary_btn = QPushButton(
+            "Login" if has_existing_admin else "Register Admin"
+        )
+        layout.addWidget(self.primary_btn)
+
+        self.setLayout(layout)
+
+        # reuse main dark theme
+        self.setStyleSheet(
+            """
+            QWidget {
+                background-color: #0F172A;
+                color: #E2E8F0;
+                font-family: Segoe UI, system-ui;
+                font-size: 10pt;
+            }
+
+            QLineEdit {
+                background-color: #1E293B;
+                border-radius: 4px;
+                padding: 6px;
+            }
+
+            QPushButton {
+                background-color: #6366F1;
+                padding: 4px 10px;
+                border-radius: 4px;
+                min-height: 26px;
+            }
+
+            QPushButton:hover {
+                background-color: #4F46E5;
+            }
+            """
+        )
+
+        self.primary_btn.clicked.connect(self.accept)
+
+    def get_credentials(self):
+
+        return self.email_input.text().strip(), self.password_input.text().strip()
+
+
 class AdminWindow(QMainWindow):
 
     def __init__(self):
@@ -129,6 +262,7 @@ class AdminWindow(QMainWindow):
         self.sidebar.addItem("Holiday Calendar")
         self.sidebar.addItem("Users")
         self.sidebar.addItem("Activity Dashboard")
+        self.sidebar.addItem("Settings")
         self.sidebar.setMaximumWidth(220)
 
         # Content area
@@ -138,11 +272,13 @@ class AdminWindow(QMainWindow):
         self.holiday_page = self.build_holiday_page()
         self.users_page = self.build_users_page()
         self.activity_page = self.build_activity_page()
+        self.settings_page = self.build_settings_page()
 
         self.stack.addWidget(self.templates_page)
         self.stack.addWidget(self.holiday_page)
         self.stack.addWidget(self.users_page)
         self.stack.addWidget(self.activity_page)
+        self.stack.addWidget(self.settings_page)
 
         self.sidebar.currentRowChanged.connect(self.stack.setCurrentIndex)
 
@@ -160,6 +296,7 @@ class AdminWindow(QMainWindow):
         self.load_holidays()
         self.load_users()
         self.load_activity()
+        self.load_settings()
 
     # Theme
     def apply_theme(self):
@@ -168,29 +305,44 @@ class AdminWindow(QMainWindow):
         QWidget {
             background-color: #0F172A;
             color: #E2E8F0;
+            font-family: Segoe UI, system-ui;
+            font-size: 10pt;
         }
 
         QListWidget {
-            background-color: #1E293B;
-            border: none;
+            background-color: #020617;
+            border: 1px solid #1E293B;
+        }
+
+        QStackedWidget {
+            background-color: #020617;
+        }
+
+        QTableWidget {
+            background-color: #020617;
+            border: 1px solid #1E293B;
+        }
+
+        QTextEdit, QLineEdit, QComboBox {
+            background-color: #020617;
+            border-radius: 4px;
+            padding: 6px;
         }
 
         QPushButton {
             background-color: #6366F1;
-            padding: 8px;
-            border-radius: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            min-height: 26px;
         }
 
         QPushButton:hover {
             background-color: #4F46E5;
         }
 
-        QTableWidget {
-            background-color: #1E293B;
-        }
-
-        QTextEdit {
-            background-color: #1E293B;
+        QLabel#sectionTitle {
+            font-size: 11pt;
+            font-weight: 600;
         }
         """)
 
@@ -200,7 +352,9 @@ class AdminWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Templates"))
+        title = QLabel("Templates")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
         self.template_list = QListWidget()
         layout.addWidget(self.template_list)
@@ -234,7 +388,9 @@ class AdminWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Holiday Calendar"))
+        title = QLabel("Holiday Calendar")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
         self.upload_holiday_btn = QPushButton("Upload Holiday Excel")
         layout.addWidget(self.upload_holiday_btn)
@@ -259,7 +415,9 @@ class AdminWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Configured Users"))
+        title = QLabel("Configured Users")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
         self.users_table = QTableWidget()
         self.users_table.setColumnCount(2)
@@ -282,7 +440,9 @@ class AdminWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("User Activity"))
+        title = QLabel("User Activity")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
         self.activity_table = QTableWidget()
         self.activity_table.setColumnCount(5)
@@ -298,6 +458,43 @@ class AdminWindow(QMainWindow):
         page.setLayout(layout)
 
         self.refresh_btn.clicked.connect(self.load_activity)
+
+        return page
+
+    # Settings Page
+    def build_settings_page(self):
+
+        page = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Brand Settings")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+
+        form = QFormLayout()
+
+        self.logo_label = QLabel("No logo selected")
+        self.logo_label.setMinimumHeight(80)
+        self.logo_label.setStyleSheet("border: 1px dashed #4B5563;")
+
+        self.logo_path_display = QLineEdit()
+        self.logo_path_display.setReadOnly(True)
+
+        self.choose_logo_btn = QPushButton("Choose Logo")
+        self.save_logo_btn = QPushButton("Save Logo")
+
+        form.addRow("Current Logo", self.logo_label)
+        form.addRow("Logo Path", self.logo_path_display)
+        form.addRow("", self.choose_logo_btn)
+        form.addRow("", self.save_logo_btn)
+
+        layout.addLayout(form)
+        layout.addStretch()
+
+        page.setLayout(layout)
+
+        self.choose_logo_btn.clicked.connect(self.choose_logo)
+        self.save_logo_btn.clicked.connect(self.save_logo)
 
         return page
 
@@ -425,3 +622,44 @@ class AdminWindow(QMainWindow):
                     col,
                     QTableWidgetItem(str(value))
                 )
+
+    # Settings Logic
+    def load_settings(self):
+
+        logo_path = get_setting("logo_path")
+
+        if logo_path:
+            self.logo_path_display.setText(logo_path)
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    160,
+                    80,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+                self.logo_label.setPixmap(scaled)
+
+    def choose_logo(self):
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Logo Image",
+            "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.svg)",
+        )
+
+        if not file_path:
+            return
+
+        self.logo_path_display.setText(file_path)
+
+    def save_logo(self):
+
+        path = self.logo_path_display.text().strip()
+
+        if not path:
+            return
+
+        set_setting("logo_path", path)
+        self.load_settings()

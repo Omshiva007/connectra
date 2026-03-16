@@ -45,6 +45,15 @@ def get_connection():
     )
     """)
 
+    # settings (for logo, theme, etc.)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS settings(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE,
+        value TEXT
+    )
+    """)
+
     conn.commit()
 
     return conn
@@ -95,6 +104,39 @@ def add_user(email, password):
     cursor.execute(
         "INSERT OR REPLACE INTO users(email,app_password,active) VALUES(?,?,1)",
         (email, password)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_setting(key):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT value FROM settings WHERE key=?",
+        (key,),
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return row[0]
+
+    return None
+
+
+def set_setting(key, value):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",
+        (key, value),
     )
 
     conn.commit()

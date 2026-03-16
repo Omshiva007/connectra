@@ -1,5 +1,3 @@
-import sqlite3
-
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -16,35 +14,32 @@ from PySide6.QtWidgets import (
 )
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFormLayout
+from PySide6.QtGui import QPixmap
 
-from template_loader import load_templates
-from template_sync import sync_templates
-from email_scanner import scan_mailbox
-from email_sender import send_email, log_email
-from holiday_checker import check_upcoming_holidays
+from connectra_core.admin_database import (
+    get_connection as get_admin_connection,
+    get_setting as get_admin_setting,
+)
+from connectra_core.database import get_connection as get_user_connection
+from connectra_core.template_loader import load_templates
+from connectra_core.template_sync import sync_templates
+from connectra_core.email_scanner import scan_mailbox
+from connectra_core.email_sender import send_email, log_email
+from connectra_core.holiday_checker import check_upcoming_holidays
 
-
-
-ADMIN_DB = "C:/Connectra/data/connectra_admin.db"
-
-
-def get_connection():
-    return sqlite3.connect(DB_NAME)
 
 
 def get_password(email):
-
-    conn = sqlite3.connect(ADMIN_DB)
+    conn = get_admin_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         "SELECT app_password FROM users WHERE email=?",
-        (email,)
+        (email,),
     )
 
     row = cursor.fetchone()
-
     conn.close()
 
     if row:
@@ -75,6 +70,35 @@ class SetupWindow(QWidget):
         layout.addWidget(self.status_label)
 
         self.setLayout(layout)
+        self.apply_theme()
+
+    def apply_theme(self):
+
+        self.setStyleSheet("""
+        QWidget {
+            background-color: #0F172A;
+            color: #E2E8F0;
+            font-family: Segoe UI, system-ui;
+            font-size: 10pt;
+        }
+
+        QPushButton {
+            background-color: #6366F1;
+            padding: 4px 10px;
+            border-radius: 4px;
+            min-height: 26px;
+        }
+
+        QPushButton:hover {
+            background-color: #4F46E5;
+        }
+
+        QLineEdit {
+            background-color: #1E293B;
+            border-radius: 4px;
+            padding: 6px;
+        }
+        """)
 
 
 class DashboardWindow(QMainWindow):
@@ -92,44 +116,65 @@ class DashboardWindow(QMainWindow):
         container = QWidget()
         main_layout = QVBoxLayout()
 
+        # Header with logo and title
+        header = QHBoxLayout()
+
+        self.logo_label = QLabel()
+        self.logo_label.setFixedHeight(64)
+
+        title_block = QVBoxLayout()
+        title = QLabel("Connectra")
+        subtitle = QLabel("Client Greeting Dashboard")
+        title_block.addWidget(title)
+        title_block.addWidget(subtitle)
+
+        header.addWidget(self.logo_label)
+        header.addLayout(title_block)
+        header.addStretch()
+
+        main_layout.addLayout(header)
+
         # Holiday reminder
         self.holiday_card = QLabel("")
+        self.holiday_card.setObjectName("holidayCard")
         main_layout.addWidget(self.holiday_card)
 
-        # Scan controls
-        scan_layout = QHBoxLayout()
+        # Scan + search toolbar
+        toolbar_layout = QHBoxLayout()
 
+        # scan range
         self.range_select = QComboBox()
-        self.range_select.addItems([
-            "1 Day",
-            "30 Days",
-            "90 Days",
-            "180 Days",
-            "1 Year",
-            "All"
-        ])
+        self.range_select.addItems(
+            [
+                "1 Day",
+                "30 Days",
+                "90 Days",
+                "180 Days",
+                "1 Year",
+                "All",
+            ]
+        )
 
+        range_block = QHBoxLayout()
+        range_block.addWidget(QLabel("Scan Range"))
+        range_block.addWidget(self.range_select)
+
+        # search
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Filter by domain name...")
+
+        # run scan on the right
         self.scan_button = QPushButton("Run Scan")
-
         self.scan_status = QLabel("")
 
-        scan_layout.addWidget(QLabel("Scan Range"))
-        scan_layout.addWidget(self.range_select)
-        scan_layout.addWidget(self.scan_button)
-        scan_layout.addWidget(self.scan_status)
+        toolbar_layout.addLayout(range_block)
+        toolbar_layout.addSpacing(16)
+        toolbar_layout.addWidget(self.search_box, stretch=1)
+        toolbar_layout.addSpacing(16)
+        toolbar_layout.addWidget(self.scan_button)
+        toolbar_layout.addWidget(self.scan_status)
 
-        main_layout.addLayout(scan_layout)
-
-        # Search
-        search_layout = QHBoxLayout()
-
-        search_layout.addWidget(QLabel("Search Domain"))
-
-        self.search_box = QLineEdit()
-
-        search_layout.addWidget(self.search_box)
-
-        main_layout.addLayout(search_layout)
+        main_layout.addLayout(toolbar_layout)
 
         # Domain and contacts
         list_layout = QHBoxLayout()
@@ -149,10 +194,10 @@ class DashboardWindow(QMainWindow):
 
         main_layout.addLayout(list_layout)
 
-        # Templates
-        template_layout = QHBoxLayout()
+        # Templates footer bar
+        template_bar = QHBoxLayout()
 
-        template_layout.addWidget(QLabel("Template"))
+        template_bar.addWidget(QLabel("Email Template"))
 
         self.template_dropdown = QComboBox()
 
@@ -161,20 +206,18 @@ class DashboardWindow(QMainWindow):
         for t in self.templates:
             self.template_dropdown.addItem(t["name"])
 
-        template_layout.addWidget(self.template_dropdown)
+        template_bar.addWidget(self.template_dropdown, stretch=1)
 
-        main_layout.addLayout(template_layout)
+        self.refresh_button = QPushButton("Refresh")
+        self.preview_button = QPushButton("Preview")
+        self.send_button = QPushButton("Send")
 
-        # Buttons
-        button_layout = QHBoxLayout()
+        template_bar.addSpacing(12)
+        template_bar.addWidget(self.refresh_button)
+        template_bar.addWidget(self.preview_button)
+        template_bar.addWidget(self.send_button)
 
-        self.refresh_button = QPushButton("Refresh Templates")
-        self.send_button = QPushButton("Send Email")
-
-        button_layout.addWidget(self.refresh_button)
-        button_layout.addWidget(self.send_button)
-
-        main_layout.addLayout(button_layout)
+        main_layout.addLayout(template_bar)
 
         container.setLayout(main_layout)
         self.setCentralWidget(container)
@@ -182,6 +225,7 @@ class DashboardWindow(QMainWindow):
         # events
         self.scan_button.clicked.connect(self.run_scan)
         self.refresh_button.clicked.connect(self.refresh_templates)
+        self.preview_button.clicked.connect(self.preview_email)
         self.domain_list.currentTextChanged.connect(self.load_contacts)
         self.search_box.textChanged.connect(self.filter_domains)
         self.send_button.clicked.connect(self.send_email_action)
@@ -189,6 +233,8 @@ class DashboardWindow(QMainWindow):
 
         self.load_domains()
         self.show_holiday_reminder()
+        self.load_branding()
+        self.apply_theme()
 
     # --------------------------
     # Scan Progress
@@ -198,6 +244,60 @@ class DashboardWindow(QMainWindow):
 
         self.scan_status.setText(f"Scanning {current}/{total}")
         QApplication.processEvents()
+
+    def load_branding(self):
+
+        logo_path = get_admin_setting("logo_path")
+
+        if logo_path:
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    160,
+                    64,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+                self.logo_label.setPixmap(scaled)
+
+    def apply_theme(self):
+
+        self.setStyleSheet("""
+        QWidget {
+            background-color: #0F172A;
+            color: #E2E8F0;
+            font-family: Segoe UI, system-ui;
+            font-size: 10pt;
+        }
+
+        QListWidget {
+            background-color: #020617;
+            border: 1px solid #1E293B;
+        }
+
+        QLineEdit, QComboBox, QTextEdit {
+            background-color: #020617;
+            border-radius: 4px;
+            padding: 6px;
+        }
+
+        QPushButton {
+            background-color: #6366F1;
+            padding: 4px 10px;
+            border-radius: 4px;
+            min-height: 26px;
+        }
+
+        QPushButton:hover {
+            background-color: #4F46E5;
+        }
+
+        QLabel#holidayCard {
+            background-color: #1E293B;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        """)
 
     def run_scan(self):
 
@@ -261,7 +361,7 @@ class DashboardWindow(QMainWindow):
 
         self.domain_list.clear()
 
-        conn = get_connection()
+        conn = get_user_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -306,7 +406,7 @@ class DashboardWindow(QMainWindow):
 
         self.contact_list.clear()
 
-        conn = get_connection()
+        conn = get_user_connection()
         cursor = conn.cursor()
 
         cursor.execute(
@@ -358,8 +458,45 @@ class DashboardWindow(QMainWindow):
     # Send Email
     # --------------------------
 
-    def send_email_action(self):
+    def preview_email(self):
+        if not self.domain_list.currentItem():
+            return
 
+        recipients = []
+
+        for i in range(self.contact_list.count()):
+            item = self.contact_list.item(i)
+            if item.checkState() == Qt.Checked:
+                recipients.append(item.text())
+
+        if not recipients:
+            return
+
+        template_index = self.template_dropdown.currentIndex()
+        template = self.templates[template_index]
+
+        # Render HTML body inside a simple wrapper so user sees formatted content
+        html = (
+            f"<p><b>To:</b> {', '.join(recipients)}</p>"
+            f"<p><b>Subject:</b> {template['subject']}</p>"
+            "<hr/>"
+            f"{template['body']}"
+        )
+
+        preview_dialog = QMessageBox(self)
+        preview_dialog.setWindowTitle("Preview Email")
+        preview_dialog.setTextFormat(Qt.RichText)
+        preview_dialog.setText(html)
+        preview_dialog.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+
+        answer = preview_dialog.exec()
+
+        if answer != QMessageBox.StandardButton.Ok:
+            return
+
+    def send_email_action(self):
         if not self.domain_list.currentItem():
             return
 

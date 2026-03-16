@@ -1,7 +1,8 @@
 import os
 import shutil
 
-ADMIN_TEMPLATE_FOLDER = "D:/ConnectraTemplates"
+# where admin publishes templates
+ADMIN_TEMPLATE_FOLDER = r"C:\Connectra\templates"
 LOCAL_TEMPLATE_FOLDER = "templates"
 
 
