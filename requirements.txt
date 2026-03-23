@@ -3,3 +3,11 @@ openpyxl
 fastapi
 uvicorn
 pydantic
+
+# Security
+cryptography
+python-dotenv
+
+# Testing
+pytest
+pytest-cov

@@ -1,14 +1,15 @@
 import os
 import shutil
+from pathlib import Path
 
 # where admin publishes templates
-ADMIN_TEMPLATE_FOLDER = r"C:\Connectra\templates"
+ADMIN_TEMPLATE_FOLDER = Path(os.environ.get("CONNECTRA_HOME", Path.home() / ".connectra")) / "templates"
 LOCAL_TEMPLATE_FOLDER = "templates"
 
 
 def sync_templates():
 
-    if not os.path.exists(ADMIN_TEMPLATE_FOLDER):
+    if not ADMIN_TEMPLATE_FOLDER.exists():
         return
 
     if not os.path.exists(LOCAL_TEMPLATE_FOLDER):
@@ -21,11 +22,10 @@ def sync_templates():
             os.remove(os.path.join(LOCAL_TEMPLATE_FOLDER, file))
 
     # copy admin templates
-    for file in os.listdir(ADMIN_TEMPLATE_FOLDER):
+    for file in ADMIN_TEMPLATE_FOLDER.iterdir():
 
-        if file.endswith(".json"):
+        if file.name.endswith(".json"):
 
-            src = os.path.join(ADMIN_TEMPLATE_FOLDER, file)
-            dst = os.path.join(LOCAL_TEMPLATE_FOLDER, file)
+            dst = os.path.join(LOCAL_TEMPLATE_FOLDER, file.name)
 
-            shutil.copy(src, dst)
+            shutil.copy(str(file), dst)
