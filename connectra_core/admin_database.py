@@ -1,23 +1,19 @@
 import os
 import sqlite3
 
-RUNTIME_ROOT = "C:/Connectra"
-DATA_DIR = os.path.join(RUNTIME_ROOT, "data")
-ADMIN_DB = os.path.join(DATA_DIR, "connectra_admin.db")
+from connectra_core.config import DATA_DIR
+
+ADMIN_DB = DATA_DIR / "connectra_admin.db"
 
 
 def ensure_runtime():
-    if not os.path.exists(RUNTIME_ROOT):
-        os.mkdir(RUNTIME_ROOT)
-
-    if not os.path.exists(DATA_DIR):
-        os.mkdir(DATA_DIR)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_connection():
     ensure_runtime()
 
-    conn = sqlite3.connect(ADMIN_DB)
+    conn = sqlite3.connect(str(ADMIN_DB))
     cursor = conn.cursor()
 
     cursor.execute(

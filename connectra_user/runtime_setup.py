@@ -1,15 +1,8 @@
-import os
-
-RUNTIME_ROOT = "C:/Connectra"
-
-TEMPLATE_DIR = os.path.join(RUNTIME_ROOT, "templates")
-DATA_DIR = os.path.join(RUNTIME_ROOT, "data")
-LOG_DIR = os.path.join(RUNTIME_ROOT, "logs")
+from connectra_core.config import RUNTIME_ROOT, TEMPLATE_DIR, DATA_DIR, LOG_DIR
 
 
 def initialize_runtime():
-
-    os.makedirs(RUNTIME_ROOT, exist_ok=True)
-    os.makedirs(TEMPLATE_DIR, exist_ok=True)
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(LOG_DIR, exist_ok=True)
+    RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
+    TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
