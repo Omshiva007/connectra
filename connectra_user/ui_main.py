@@ -27,6 +27,7 @@ from connectra_core.template_sync import sync_templates
 from connectra_core.email_scanner import scan_mailbox
 from connectra_core.email_sender import send_email, log_email
 from connectra_core.holiday_checker import check_upcoming_holidays
+from connectra_core.security import decrypt_password
 
 
 
@@ -43,7 +44,11 @@ def get_password(email):
     conn.close()
 
     if row:
-        return row[0]
+        try:
+            return decrypt_password(row[0])
+        except ValueError:
+            # Fallback for passwords stored before encryption was introduced.
+            return row[0]
 
     return None
 

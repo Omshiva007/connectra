@@ -1,25 +1,22 @@
 import sqlite3
-import os
 
-RUNTIME_ROOT = "C:/Connectra"
-DATA_DIR = os.path.join(RUNTIME_ROOT, "data")
-DB_NAME = os.path.join(DATA_DIR, "connectra_admin.db")
+from connectra_core.config import DATA_DIR
+from connectra_core.security import encrypt_password, decrypt_password
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_NAME = DATA_DIR / "connectra_admin.db"
 
 
 def ensure_runtime():
-
-    if not os.path.exists(RUNTIME_ROOT):
-        os.mkdir(RUNTIME_ROOT)
-
-    if not os.path.exists(DATA_DIR):
-        os.mkdir(DATA_DIR)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_connection():
 
     ensure_runtime()
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(str(DB_NAME))
     cursor = conn.cursor()
 
     # holiday calendar table
@@ -103,7 +100,7 @@ def add_user(email, password):
 
     cursor.execute(
         "INSERT OR REPLACE INTO users(email,app_password,active) VALUES(?,?,1)",
-        (email, password)
+        (email, encrypt_password(password))
     )
 
     conn.commit()

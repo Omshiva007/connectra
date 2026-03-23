@@ -1,20 +1,18 @@
 import sqlite3
 from datetime import datetime, timedelta
-import os
 
-RUNTIME_ROOT = "C:/Connectra"
-DATA_DIR = os.path.join(RUNTIME_ROOT, "data")
+from connectra_core.config import DATA_DIR
 
-ADMIN_DB = os.path.join(DATA_DIR, "connectra_admin.db")
+ADMIN_DB = DATA_DIR / "connectra_admin.db"
 
 
 def get_connection():
-    return sqlite3.connect(ADMIN_DB)
+    return sqlite3.connect(str(ADMIN_DB))
 
 
 def check_upcoming_holidays():
 
-    if not os.path.exists(ADMIN_DB):
+    if not ADMIN_DB.exists():
         return []
 
     conn = get_connection()
