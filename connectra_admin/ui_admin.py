@@ -28,7 +28,16 @@ from template_manager import (
 )
 
 from holiday_importer import import_holiday_excel
-from database_admin import get_holidays, get_users, add_user, get_setting, set_setting
+from database_admin import (
+    get_holidays,
+    get_users,
+    add_user,
+    update_user,
+    get_user_password,
+    get_setting,
+    set_setting,
+)
+from user_app_bundle import create_user_app_bundle
 from activity_viewer import get_logs
 
 
@@ -132,21 +141,26 @@ class TemplateEditor(QDialog):
 
 class UserEditor(QDialog):
 
-    def __init__(self):
+    def __init__(self, email="", password="", lock_email=False):
         super().__init__()
 
-        self.setWindowTitle("Add User")
+        self.lock_email = lock_email
+        self.setWindowTitle("Edit User" if email else "Add User")
 
         layout = QVBoxLayout()
 
         layout.addWidget(QLabel("User Email"))
 
         self.email_input = QLineEdit()
+        self.email_input.setText(email)
+        if lock_email:
+            self.email_input.setReadOnly(True)
         layout.addWidget(self.email_input)
 
         layout.addWidget(QLabel("App Password"))
 
         self.password_input = QLineEdit()
+        self.password_input.setText(password)
         layout.addWidget(self.password_input)
 
         self.save_btn = QPushButton("Save User")
@@ -164,7 +178,10 @@ class UserEditor(QDialog):
         if not email or not password:
             return
 
-        add_user(email, password)
+        if self.lock_email:
+            update_user(email, password)
+        else:
+            add_user(email, password)
 
         self.accept()
 
@@ -425,12 +442,23 @@ class AdminWindow(QMainWindow):
 
         layout.addWidget(self.users_table)
 
+        btn_layout = QHBoxLayout()
+
         self.add_user_btn = QPushButton("Add User")
-        layout.addWidget(self.add_user_btn)
+        self.edit_user_btn = QPushButton("Edit Selected User")
+        self.build_installer_btn = QPushButton("Build Installer for Selected User")
+
+        btn_layout.addWidget(self.add_user_btn)
+        btn_layout.addWidget(self.edit_user_btn)
+        btn_layout.addWidget(self.build_installer_btn)
+
+        layout.addLayout(btn_layout)
 
         page.setLayout(layout)
 
         self.add_user_btn.clicked.connect(self.add_user)
+        self.edit_user_btn.clicked.connect(self.edit_user)
+        self.build_installer_btn.clicked.connect(self.build_user_installer)
 
         return page
 
@@ -605,6 +633,65 @@ class AdminWindow(QMainWindow):
 
         if editor.exec():
             self.load_users()
+
+    def edit_user(self):
+
+        row = self.users_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a user to edit.")
+            return
+
+        email_item = self.users_table.item(row, 0)
+        if not email_item:
+            return
+
+        email = email_item.text()
+        current_password = get_user_password(email) or ""
+
+        editor = UserEditor(email=email, password=current_password, lock_email=True)
+
+        if editor.exec():
+            self.load_users()
+
+    def build_user_installer(self):
+
+        row = self.users_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a user to build an installer for.")
+            return
+
+        email_item = self.users_table.item(row, 0)
+        if not email_item:
+            return
+
+        email = email_item.text()
+        password = get_user_password(email)
+
+        if not password:
+            QMessageBox.warning(
+                self,
+                "Missing Password",
+                f"No app password found for {email}. Please edit the user first."
+            )
+            return
+
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Installer Zip",
+            f"connectra_user_{email.split('@')[0]}.zip",
+            "Zip Files (*.zip)"
+        )
+
+        if not output_path:
+            return
+
+        try:
+            create_user_app_bundle(output_path, user_email=email, user_app_password=password)
+            QMessageBox.information(self, "Success", f"Installer saved to:\n{output_path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Build Failed", str(exc))
 
     # Activity Logic
     def load_activity(self):

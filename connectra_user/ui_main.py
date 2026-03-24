@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QMessageBox,
     QCheckBox,
+    QDialog,
+    QFormLayout,
 )
 
 from PySide6.QtCore import Qt
@@ -27,7 +29,22 @@ from connectra_core.template_sync import sync_templates
 from connectra_core.email_scanner import scan_mailbox
 from connectra_core.email_sender import send_email, log_email
 from connectra_core.holiday_checker import check_upcoming_holidays
-from connectra_core.security import decrypt_password
+from connectra_core.security import decrypt_password, encrypt_password
+
+
+def _save_user_password(email: str, new_password: str) -> None:
+    """Persist an updated app password for *email* in the admin DB."""
+    import logging
+    conn = get_admin_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET app_password=? WHERE email=?",
+        (encrypt_password(new_password), email),
+    )
+    if cursor.rowcount == 0:
+        logging.warning("_save_user_password: no user found for email %s", email)
+    conn.commit()
+    conn.close()
 
 
 
@@ -104,6 +121,50 @@ class SetupWindow(QWidget):
             padding: 6px;
         }
         """)
+
+
+class SettingsDialog(QDialog):
+    """Allow the user to update their app password from the dashboard."""
+
+    def __init__(self, email: str, parent=None):
+        super().__init__(parent)
+
+        self.email = email
+        self.new_password: str | None = None
+
+        self.setWindowTitle("Settings")
+        self.resize(360, 160)
+
+        layout = QVBoxLayout()
+
+        form = QFormLayout()
+
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setPlaceholderText("Enter new app password")
+
+        form.addRow("Email", QLabel(email))
+        form.addRow("New App Password", self.password_input)
+
+        layout.addLayout(form)
+
+        self.save_btn = QPushButton("Save")
+        layout.addWidget(self.save_btn)
+
+        self.setLayout(layout)
+
+        self.save_btn.clicked.connect(self._save)
+
+    def _save(self):
+        password = self.password_input.text().strip()
+        if not password:
+            QMessageBox.warning(self, "Validation", "Password cannot be empty.")
+            return
+        if len(password) < 8:
+            QMessageBox.warning(self, "Validation", "Password must be at least 8 characters.")
+            return
+        self.new_password = password
+        self.accept()
 
 
 class DashboardWindow(QMainWindow):
@@ -216,11 +277,13 @@ class DashboardWindow(QMainWindow):
         self.refresh_button = QPushButton("Refresh")
         self.preview_button = QPushButton("Preview")
         self.send_button = QPushButton("Send")
+        self.settings_button = QPushButton("Settings")
 
         template_bar.addSpacing(12)
         template_bar.addWidget(self.refresh_button)
         template_bar.addWidget(self.preview_button)
         template_bar.addWidget(self.send_button)
+        template_bar.addWidget(self.settings_button)
 
         main_layout.addLayout(template_bar)
 
@@ -235,6 +298,7 @@ class DashboardWindow(QMainWindow):
         self.search_box.textChanged.connect(self.filter_domains)
         self.send_button.clicked.connect(self.send_email_action)
         self.select_all_checkbox.stateChanged.connect(self.toggle_all_contacts)
+        self.settings_button.clicked.connect(self.open_settings)
 
         self.load_domains()
         self.show_holiday_reminder()
@@ -538,3 +602,16 @@ class DashboardWindow(QMainWindow):
         )
 
         QMessageBox.information(self, "Success", "Email sent")
+
+    # --------------------------
+    # Settings
+    # --------------------------
+
+    def open_settings(self):
+
+        dialog = SettingsDialog(self.user_email, parent=self)
+
+        if dialog.exec() and dialog.new_password:
+            _save_user_password(self.user_email, dialog.new_password)
+            self.password = dialog.new_password
+            QMessageBox.information(self, "Settings", "Password updated successfully.")
