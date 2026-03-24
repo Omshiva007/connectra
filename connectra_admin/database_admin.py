@@ -107,6 +107,45 @@ def add_user(email, password):
     conn.close()
 
 
+def update_user(email, password):
+    """Update the app password for an existing user."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE users SET app_password=? WHERE email=?",
+        (encrypt_password(password), email)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_user_password(email):
+    """Return the plaintext app password for *email*, or None if not found."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT app_password FROM users WHERE email=?",
+        (email,)
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        try:
+            return decrypt_password(row[0])
+        except ValueError:
+            # Fallback for passwords stored before encryption was introduced.
+            return row[0]
+
+    return None
+
+
 def get_setting(key):
 
     conn = get_connection()
