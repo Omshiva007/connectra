@@ -1,5 +1,10 @@
+import os
 import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
+
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 
 from ui_admin import AdminWindow, AdminAuthDialog
 from runtime_setup import initialize_runtime

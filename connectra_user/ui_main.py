@@ -11,16 +11,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QMessageBox,
     QCheckBox,
-    QDialog,
-    QFormLayout,
 )
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QFormLayout
+from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QPixmap
 
 from connectra_core.admin_database import (
-    get_connection as get_admin_connection,
     get_setting as get_admin_setting,
 )
 from connectra_core.database import get_connection as get_user_connection
@@ -29,45 +26,6 @@ from connectra_core.template_sync import sync_templates
 from connectra_core.email_scanner import scan_mailbox
 from connectra_core.email_sender import send_email, log_email
 from connectra_core.holiday_checker import check_upcoming_holidays
-from connectra_core.security import decrypt_password, encrypt_password
-
-
-def _save_user_password(email: str, new_password: str) -> None:
-    """Persist an updated app password for *email* in the admin DB."""
-    import logging
-    conn = get_admin_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE users SET app_password=? WHERE email=?",
-        (encrypt_password(new_password), email),
-    )
-    if cursor.rowcount == 0:
-        logging.warning("_save_user_password: no user found for email %s", email)
-    conn.commit()
-    conn.close()
-
-
-
-def get_password(email):
-    conn = get_admin_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT app_password FROM users WHERE email=?",
-        (email,),
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    if row:
-        try:
-            return decrypt_password(row[0])
-        except ValueError:
-            # Fallback for passwords stored before encryption was introduced.
-            return row[0]
-
-    return None
 
 
 class SetupWindow(QWidget):
@@ -80,10 +38,15 @@ class SetupWindow(QWidget):
 
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Enter your email"))
+        layout.addWidget(QLabel("Enter your licensed email"))
 
         self.email_input = QLineEdit()
         layout.addWidget(self.email_input)
+
+        layout.addWidget(QLabel("Enter your passcode"))
+        self.passcode_input = QLineEdit()
+        self.passcode_input.setEchoMode(QLineEdit.EchoMode.Password)
+        layout.addWidget(self.passcode_input)
 
         self.connect_button = QPushButton("Login")
         layout.addWidget(self.connect_button)
@@ -123,58 +86,14 @@ class SetupWindow(QWidget):
         """)
 
 
-class SettingsDialog(QDialog):
-    """Allow the user to update their app password from the dashboard."""
-
-    def __init__(self, email: str, parent=None):
-        super().__init__(parent)
-
-        self.email = email
-        self.new_password: str | None = None
-
-        self.setWindowTitle("Settings")
-        self.resize(360, 160)
-
-        layout = QVBoxLayout()
-
-        form = QFormLayout()
-
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setPlaceholderText("Enter new app password")
-
-        form.addRow("Email", QLabel(email))
-        form.addRow("New App Password", self.password_input)
-
-        layout.addLayout(form)
-
-        self.save_btn = QPushButton("Save")
-        layout.addWidget(self.save_btn)
-
-        self.setLayout(layout)
-
-        self.save_btn.clicked.connect(self._save)
-
-    def _save(self):
-        password = self.password_input.text().strip()
-        if not password:
-            QMessageBox.warning(self, "Validation", "Password cannot be empty.")
-            return
-        if len(password) < 8:
-            QMessageBox.warning(self, "Validation", "Password must be at least 8 characters.")
-            return
-        self.new_password = password
-        self.accept()
-
-
 class DashboardWindow(QMainWindow):
 
-    def __init__(self, email):
+    def __init__(self, email, passcode):
 
         super().__init__()
 
         self.user_email = email
-        self.password = get_password(email)
+        self.password = passcode
 
         self.setWindowTitle("Connectra")
         self.resize(1000, 650)
@@ -299,6 +218,7 @@ class DashboardWindow(QMainWindow):
         self.send_button.clicked.connect(self.send_email_action)
         self.select_all_checkbox.stateChanged.connect(self.toggle_all_contacts)
         self.settings_button.clicked.connect(self.open_settings)
+        self.settings_button.setToolTip("Passcode is managed by admin-issued license package")
 
         self.load_domains()
         self.show_holiday_reminder()
@@ -608,10 +528,8 @@ class DashboardWindow(QMainWindow):
     # --------------------------
 
     def open_settings(self):
-
-        dialog = SettingsDialog(self.user_email, parent=self)
-
-        if dialog.exec() and dialog.new_password:
-            _save_user_password(self.user_email, dialog.new_password)
-            self.password = dialog.new_password
-            QMessageBox.information(self, "Settings", "Password updated successfully.")
+        QMessageBox.information(
+            self,
+            "Passcode Managed by Admin",
+            "This build uses a signed local license. Ask your admin to regenerate your package to rotate the passcode.",
+        )
