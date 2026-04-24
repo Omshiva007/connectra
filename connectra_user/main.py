@@ -8,22 +8,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from ui_main import DashboardWindow, SetupWindow
-from connectra_core.admin_database import get_connection
-
-
-def email_allowed(email):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT email FROM users WHERE email=?",
-        (email,),
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    return row is not None
+from connectra_core.license_auth import verify_local_login
 
 
 class ConnectraApp:
@@ -38,15 +23,18 @@ class ConnectraApp:
     def handle_login(self):
         email = self.setup_window.email_input.text().strip()
 
-        if not email:
-            self.setup_window.status_label.setText("Enter email")
+        passcode = self.setup_window.passcode_input.text().strip()
+
+        if not email or not passcode:
+            self.setup_window.status_label.setText("Enter email and passcode")
             return
 
-        if not email_allowed(email):
-            self.setup_window.status_label.setText("Email not authorized")
+        is_valid, message = verify_local_login(email, passcode)
+        if not is_valid:
+            self.setup_window.status_label.setText(message)
             return
 
-        self.dashboard_window = DashboardWindow(email)
+        self.dashboard_window = DashboardWindow(email, passcode)
         self.dashboard_window.show()
         self.setup_window.hide()
 
