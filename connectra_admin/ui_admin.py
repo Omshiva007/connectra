@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QLineEdit,
     QFormLayout,
+    QInputDialog,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
@@ -667,14 +668,21 @@ class AdminWindow(QMainWindow):
             return
 
         email = email_item.text()
-        password = get_user_password(email)
+        suggested_passcode = get_user_password(email) or ""
+        passcode, ok = QInputDialog.getText(
+            self,
+            "User Passcode",
+            f"Enter passcode for {email}:",
+            QLineEdit.Password,
+            suggested_passcode,
+        )
 
-        if not password:
-            QMessageBox.warning(
-                self,
-                "Missing Password",
-                f"No app password found for {email}. Please edit the user first."
-            )
+        if not ok:
+            return
+
+        passcode = passcode.strip()
+        if not passcode:
+            QMessageBox.warning(self, "Missing Passcode", "Passcode is required.")
             return
 
         output_path, _ = QFileDialog.getSaveFileName(
@@ -688,8 +696,13 @@ class AdminWindow(QMainWindow):
             return
 
         try:
-            create_user_app_bundle(output_path, user_email=email, user_app_password=password)
-            QMessageBox.information(self, "Success", f"Installer saved to:\n{output_path}")
+            create_user_app_bundle(output_path, user_email=email, user_passcode=passcode)
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Installer saved to:\n{output_path}\n\n"
+                f"Share this passcode securely with the user:\n{passcode}",
+            )
         except Exception as exc:
             QMessageBox.critical(self, "Build Failed", str(exc))
 
