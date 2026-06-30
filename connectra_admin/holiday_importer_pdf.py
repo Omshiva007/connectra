@@ -1,3 +1,5 @@
+"""Parse holiday calendar data from PDF-extracted text lines."""
+
 import re
 from datetime import datetime
 
@@ -10,6 +12,7 @@ LINE_PATTERN = re.compile(
 
 
 def parse_pdf_text(lines):
+    """Extract holiday names and dates from text lines copied from a PDF."""
     holidays = []
 
     for line in lines:
@@ -44,6 +47,7 @@ def parse_pdf_text(lines):
 
 
 def import_holiday_pdf_lines(lines):
+    """Replace the holiday calendar using parsed PDF text lines."""
     holidays = parse_pdf_text(lines)
 
     if not holidays:

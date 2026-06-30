@@ -20,12 +20,55 @@ from pathlib import Path
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _candidate_user_exes() -> list[Path]:
+    """Return likely locations for an already-built User app executable."""
+    repo_root = Path(__file__).resolve().parent.parent
+    exe_dir = Path(sys.executable).resolve().parent
+
+    return [
+        # When testing/building from the repository.
+        repo_root / "connectra_user" / "dist" / "connectra_user.exe",
+        # When Admin and User EXEs are extracted into the same release folder.
+        exe_dir / "connectra_user.exe",
+        # When running repo-built Admin from connectra_admin/dist.
+        exe_dir.parent.parent / "connectra_user" / "dist" / "connectra_user.exe",
+        # When running from a copied Admin EXE beside repo-style folders.
+        exe_dir.parent / "connectra_user" / "dist" / "connectra_user.exe",
+    ]
+
+
+def _find_existing_user_exe() -> Path | None:
+    """Find a prebuilt User app executable if one is available."""
+    for candidate in _candidate_user_exes():
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def find_existing_user_exe() -> Path | None:
+    """Return the first available prebuilt User app executable."""
+    return _find_existing_user_exe()
+
+
 def _build_user_exe(build_dir: Path) -> Path:
     """Run PyInstaller to produce the connectra_user executable.
 
     Returns the path to the built executable (or single-dir dist folder).
     Raises RuntimeError if the build fails.
     """
+    existing_exe = _find_existing_user_exe()
+    if existing_exe:
+        return existing_exe
+
+    if getattr(sys, "frozen", False):
+        searched = "\n".join(str(path) for path in _candidate_user_exes())
+        raise RuntimeError(
+            "Could not find connectra_user.exe to bundle.\n\n"
+            "Place connectra_user.exe next to connectra_admin.exe, or use the "
+            "repo dist output before building a user installer.\n\n"
+            f"Searched:\n{searched}"
+        )
+
     repo_root = Path(__file__).resolve().parent.parent
     spec_file = repo_root / "connectra_user" / "connectra_user.spec"
     main_script = repo_root / "connectra_user" / "main.py"
@@ -69,7 +112,14 @@ def _build_user_exe(build_dir: Path) -> Path:
     return exe_candidates[0]
 
 
-def _create_seed_license(seed_dir: Path, user_email: str, user_passcode: str) -> None:
+def _create_seed_license(
+    seed_dir: Path,
+    user_email: str,
+    user_passcode: str,
+    mailbox_password: str | None = None,
+    employee_id: str | None = None,
+) -> None:
+    """Create license seed files that bind a bundle to one user."""
     from connectra_core.license_auth import (
         PUBLIC_KEY_FILE_NAME,
         LICENSE_FILE_NAME,
@@ -78,7 +128,12 @@ def _create_seed_license(seed_dir: Path, user_email: str, user_passcode: str) ->
         write_public_key_file,
     )
 
-    license_doc = create_signed_license(user_email, user_passcode)
+    license_doc = create_signed_license(
+        user_email,
+        user_passcode,
+        mailbox_password,
+        employee_id=employee_id,
+    )
     write_license_file(license_doc, seed_dir / LICENSE_FILE_NAME)
     write_public_key_file(seed_dir / PUBLIC_KEY_FILE_NAME)
 
@@ -147,6 +202,8 @@ def create_user_app_bundle(
     output_zip_path: str,
     user_email: str | None = None,
     user_passcode: str | None = None,
+    mailbox_password: str | None = None,
+    employee_id: str | None = None,
 ) -> None:
     """Build a distributable installer zip for the Connectra User App.
 
@@ -160,8 +217,15 @@ def create_user_app_bundle(
     user_passcode:
         User passcode used for local license validation. Ignored when
         *user_email* is ``None``.
+    mailbox_password:
+        Mailbox app password/key encrypted into the signed license for scan
+        and send authentication.
+    employee_id:
+        Employee identifier embedded in the bootstrap license.
     """
     include_seed = bool(user_email and user_passcode)
+    if include_seed and not employee_id:
+        raise ValueError("Employee ID is required for a licensed bootstrap package.")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -183,7 +247,13 @@ def create_user_app_bundle(
         if include_seed:
             seed_dir = staging / "seed"
             seed_dir.mkdir()
-            _create_seed_license(seed_dir, user_email, user_passcode)
+            _create_seed_license(
+                seed_dir,
+                user_email,
+                user_passcode,
+                mailbox_password,
+                employee_id,
+            )
 
         # 4. Write install scripts
         _write_install_scripts(staging, include_seed_files=include_seed)

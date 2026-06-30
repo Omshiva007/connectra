@@ -1,3 +1,5 @@
+"""Holiday reminder lookup used by the User app dashboard."""
+
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -7,10 +9,12 @@ ADMIN_DB = DATA_DIR / "connectra_admin.db"
 
 
 def get_connection():
+    """Open the shared admin database that stores holiday reminders."""
     return sqlite3.connect(str(ADMIN_DB))
 
 
 def check_upcoming_holidays():
+    """Return active holidays whose reminder date is today."""
 
     if not ADMIN_DB.exists():
         return []

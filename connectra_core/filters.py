@@ -1,3 +1,5 @@
+"""Email filtering helpers for excluding internal/non-client domains."""
+
 def is_internal_email(email, internal_domain):
     """
     Returns True if the email belongs to the internal company domain

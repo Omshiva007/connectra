@@ -1,9 +1,15 @@
+"""Shared runtime path and backend URL configuration."""
+
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-load_dotenv()
+if load_dotenv:
+    load_dotenv()
 
 # Base directory for all runtime data.  Can be overridden via the
 # CONNECTRA_DATA_DIR environment variable so the app works on every

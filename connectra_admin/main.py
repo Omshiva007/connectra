@@ -1,3 +1,5 @@
+"""Entry point for the Connectra Admin desktop application."""
+
 import os
 import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -8,18 +10,19 @@ if BASE_DIR not in sys.path:
 
 from ui_admin import AdminWindow, AdminAuthDialog
 from runtime_setup import initialize_runtime
-from database_admin import get_users, add_user
+from database_admin import add_admin_account, get_admin_accounts, verify_admin_login
 
 
 def main():
+    """Run admin authentication and open the Admin dashboard."""
 
     initialize_runtime()
 
     app = QApplication(sys.argv)
 
-    existing_users = get_users()
+    existing_admins = get_admin_accounts()
 
-    auth_dialog = AdminAuthDialog(has_existing_admin=bool(existing_users))
+    auth_dialog = AdminAuthDialog(has_existing_admin=bool(existing_admins))
 
     if not auth_dialog.exec():
         sys.exit(0)
@@ -30,9 +33,12 @@ def main():
         QMessageBox.warning(None, "Error", "Email and password are required")
         sys.exit(0)
 
-    if not existing_users:
+    if not existing_admins:
         # first-time setup: register this admin
-        add_user(email, password)
+        add_admin_account(email, password)
+    elif not verify_admin_login(email, password):
+        QMessageBox.warning(None, "Login Failed", "Invalid admin email or password")
+        sys.exit(0)
 
     window = AdminWindow()
     window.show()

@@ -1,31 +1,39 @@
-import os
-import shutil
+"""Template seeding helpers for first-run user profiles."""
 
-# where admin publishes templates
-ADMIN_TEMPLATE_FOLDER = r"C:\Connectra\templates"
-LOCAL_TEMPLATE_FOLDER = "templates"
+import shutil
+from pathlib import Path
+
+from connectra_core.config import TEMPLATE_DIR
+
+
+def _source_template_dirs() -> list[Path]:
+    """Return bundled template folders used to seed a new runtime profile."""
+    repo_root = Path(__file__).resolve().parent.parent
+    return [
+        repo_root / "connectra_admin" / "templates",
+        repo_root / "connectra_user" / "templates",
+    ]
 
 
 def sync_templates():
+    """Refresh runtime templates from available admin-managed source templates."""
+    TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not os.path.exists(ADMIN_TEMPLATE_FOLDER):
+    sources = [
+        path
+        for folder in _source_template_dirs()
+        if folder.exists()
+        for path in folder.glob("*.json")
+    ]
+
+    if not sources:
         return
 
-    if not os.path.exists(LOCAL_TEMPLATE_FOLDER):
-        os.makedirs(LOCAL_TEMPLATE_FOLDER)
-
-    # remove old templates
-    for file in os.listdir(LOCAL_TEMPLATE_FOLDER):
-
-        if file.endswith(".json"):
-            os.remove(os.path.join(LOCAL_TEMPLATE_FOLDER, file))
-
-    # copy admin templates
-    for file in os.listdir(ADMIN_TEMPLATE_FOLDER):
-
-        if file.endswith(".json"):
-
-            src = os.path.join(ADMIN_TEMPLATE_FOLDER, file)
-            dst = os.path.join(LOCAL_TEMPLATE_FOLDER, file)
-
-            shutil.copy(src, dst)
+    for src in sources:
+        destination = TEMPLATE_DIR / src.name
+        if (
+            not destination.exists()
+            or src.stat().st_mtime_ns > destination.stat().st_mtime_ns
+            or src.read_bytes() != destination.read_bytes()
+        ):
+            shutil.copy2(src, destination)

@@ -1,17 +1,19 @@
-import sqlite3
-import os
+"""Admin activity reporting helpers for local outreach logs."""
 
-RUNTIME_ROOT = "C:/Connectra"
-DATA_DIR = os.path.join(RUNTIME_ROOT, "data")
-USER_DB = os.path.join(DATA_DIR, "connectra_user.db")
+import sqlite3
+import csv
+
+from connectra_core.config import DATA_DIR
+
+USER_DB = DATA_DIR / "connectra_user.db"
 
 
 def get_logs():
-
-    if not os.path.exists(USER_DB):
+    """Read user-app outreach activity from the shared local user database."""
+    if not USER_DB.exists():
         return []
 
-    conn = sqlite3.connect(USER_DB)
+    conn = sqlite3.connect(str(USER_DB))
     cursor = conn.cursor()
 
     try:
@@ -24,9 +26,36 @@ def get_logs():
 
         rows = cursor.fetchall()
 
-    except:
+    except sqlite3.Error:
         rows = []
 
     conn.close()
 
     return rows
+
+
+def get_activity_summary():
+    """Aggregate local activity rows for the admin dashboard counters."""
+    logs = get_logs()
+    users = {row[1] for row in logs}
+    clients = {row[2] for row in logs}
+    recipients = sum(row[4] or 0 for row in logs)
+
+    return {
+        "emails_sent": len(logs),
+        "active_users": len(users),
+        "client_domains": len(clients),
+        "recipients": recipients,
+    }
+
+
+def export_logs_csv(output_path):
+    """Export activity rows to CSV for offline reporting or sharing."""
+    logs = get_logs()
+
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Time", "User", "Client", "Template", "Recipients"])
+        writer.writerows(logs)
+
+    return len(logs)

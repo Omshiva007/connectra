@@ -35,6 +35,7 @@ def _load_or_create_key() -> bytes:
 
 
 def _get_fernet() -> Fernet:
+    """Return a cached Fernet instance for repeated encryption operations."""
     global _fernet_instance
     if _fernet_instance is None:
         _fernet_instance = Fernet(_load_or_create_key())

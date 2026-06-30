@@ -16,6 +16,10 @@ env/
 
 # Test / coverage
 .pytest_cache/
+.pytest_tmp/
+.exe_test_data/
+.tmp/
+.bundle_test_data/
 htmlcov/
 .coverage
 coverage.xml

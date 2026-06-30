@@ -1,8 +1,11 @@
+"""Import holiday calendar rows from an Excel workbook into admin SQLite."""
+
 from openpyxl import load_workbook
 from database_admin import get_connection
 
 
 def import_holiday_excel(file_path):
+    """Replace the holiday calendar with rows from the selected workbook."""
 
     wb = load_workbook(file_path)
     sheet = wb.active

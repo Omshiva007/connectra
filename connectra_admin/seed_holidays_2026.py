@@ -1,3 +1,5 @@
+"""Development helper to seed common 2026 holidays into the admin database."""
+
 from datetime import date
 
 from database_admin import get_connection
@@ -22,6 +24,7 @@ HOLIDAYS_2026 = [
 
 
 def seed():
+    """Insert or replace the built-in 2026 holiday seed rows."""
     conn = get_connection()
     cursor = conn.cursor()
 
